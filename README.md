@@ -37,4 +37,4 @@ Matching items in these datasets went with some simplification. In particular, F
 
 Ultimately, the Bank Distress Event Dataset lists major distress events of European banks from 2000 to end-2020, at a quarterly frequency. This dataset builds on the nomenclature presented in [Betz et al. (2014)](https://doi.org/10.1016/j.jbankfin.2013.11.041).
 
-You can also find some monetary policy calendars and the Transparency Exercise dashboard, an example use of Stress-Testing and Transparency Exercise data within this repository.
+You can also find some [monetary policy calendars](https://github.com/thestresstester/EBA_GALAXY/tree/7cc10f5c54a60b632c6c0dc8a15ae39206324cc2/Monetary%20Policy%20Calendars) and the [Transparency Exercise dashboard](https://github.com/thestresstester/EBA_GALAXY/tree/7cc10f5c54a60b632c6c0dc8a15ae39206324cc2/Transparency%20Dashboard), an example use of Stress-Testing and Transparency Exercise data within this repository.

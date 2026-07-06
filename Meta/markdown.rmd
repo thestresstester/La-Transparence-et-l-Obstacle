@@ -81,3 +81,5 @@ Sources: S&P, Moody's and Fitch annual compendiums of corporate defaults, Eikon 
 
 - Frank Betz, Silviu Oprică, Tuomas A. Peltonen, and Peter Sarlin. Predicting distress in European banks. Journal of Banking & Finance, 45 :225–241, 2014. DOI: [https://doi.org/10.1016/j.jbankfin.2013.11.041](https://doi.org/10.1016/j.jbankfin.2013.11.041)
 - Brenda González-Hermosillo. Determinants of ex-ante banking system distress: A macro-micro empirical exploration of some recent episodes. Working Paper No. 99/33, International Monetary Fund, New York, 1999. DOI: [https://doi.org/10.5089/9781451845167.001](https://doi.org/10.5089/9781451845167.001)
+
+You can also find some [monetary policy calendars](https://github.com/thestresstester/EBA_GALAXY/tree/7cc10f5c54a60b632c6c0dc8a15ae39206324cc2/Monetary%20Policy%20Calendars) and the [Transparency Exercise dashboard](https://github.com/thestresstester/EBA_GALAXY/tree/7cc10f5c54a60b632c6c0dc8a15ae39206324cc2/Transparency%20Dashboard), an example use of Stress-Testing and Transparency Exercise data within the Github repository.
