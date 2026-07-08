@@ -1,19 +1,19 @@
-# rm(list = ls())
-# cat("\014")
-# path <- dirname(rstudioapi::getSourceEditorContext()$path)
-# 
-# setwd(path)
-# getwd()
-# 
-# install_if_missing <- function(packages) {
-#   new_packages <- packages[!(packages %in% installed.packages()[, "Package"])]
-#   if (length(new_packages)) {
-#     install.packages(new_packages, dependencies = TRUE)
-#   }
-# }
+rm(list = ls())
+cat("\014")
+path <- dirname(rstudioapi::getSourceEditorContext()$path)
+
+setwd(path)
+getwd()
+
+install_if_missing <- function(packages) {
+  new_packages <- packages[!(packages %in% installed.packages()[, "Package"])]
+  if (length(new_packages)) {
+    install.packages(new_packages, dependencies = TRUE)
+  }
+}
 
 library(shiny)
-library(fst)
+# library(fst)
 library(shinyjs)
 library(shinybusy)
 library(DT)
@@ -30,6 +30,9 @@ library(visNetwork)
 library(zoo)
 library(lubridate)
 library(markdown)
+library(duckdb)
+library(arrow)
+
 
 # required_packages <- c(
 #   "shiny", "fst", "shinyjs", "shinybusy", "DT", "htmltools", 
@@ -1050,35 +1053,35 @@ server <- function(input, output, session) {
   chart_data_loaded <- reactiveVal(FALSE)
   chart_db <- reactiveVal(NULL)
   
-  observeEvent(input$`main-tabs`, {
-    if(input$`main-tabs` == "Visualisation" && !chart_data_loaded()) {
-      # Show loading indicator
-      showModal(modalDialog(
-        title = "Loading Visualisation Data",
-        "Please wait while we load the chart database...",
-        footer = NULL,
-        easyClose = FALSE
-      ))
-      
-      # Safely load the data with error handling
-      tryCatch({
-        loaded_chart_db <- read.fst("Meta/Original Data/chart_db.fst")
-        chart_db(loaded_chart_db)
-        chart_data_loaded(TRUE)
-        
-        # Remove loading indicator
-        removeModal()
-      }, error = function(e) {
-        removeModal()
-        showModal(modalDialog(
-          title = "Error Loading Data",
-          paste("Failed to load chart database:", e$message),
-          footer = modalButton("Close"),
-          easyClose = TRUE
-        ))
-      })
-    }
-  }, priority = 100)  # Higher priority to ensure it runs first
+  # observeEvent(input$`main-tabs`, {
+  #   if(input$`main-tabs` == "Visualisation" && !chart_data_loaded()) {
+  #     # Show loading indicator
+  #     showModal(modalDialog(
+  #       title = "Loading Visualisation Data",
+  #       "Please wait while we load the chart database...",
+  #       footer = NULL,
+  #       easyClose = FALSE
+  #     ))
+  #     
+  #     # Safely load the data with error handling
+  #     tryCatch({
+  #       loaded_chart_db <- read.fst("Meta/Original Data/chart_db.fst")
+  #       chart_db(loaded_chart_db)
+  #       chart_data_loaded(TRUE)
+  #       
+  #       # Remove loading indicator
+  #       removeModal()
+  #     }, error = function(e) {
+  #       removeModal()
+  #       showModal(modalDialog(
+  #         title = "Error Loading Data",
+  #         paste("Failed to load chart database:", e$message),
+  #         footer = modalButton("Close"),
+  #         easyClose = TRUE
+  #       ))
+  #     })
+  #   }
+  # }, priority = 100)  # Higher priority to ensure it runs first
   
   
   output$st_data_loaded <- reactive(st_data_loaded())
@@ -2839,12 +2842,13 @@ server <- function(input, output, session) {
       if (nrow(filtered_df) < 500000) {
         write.csv(filtered_df, file.path(temp_dir, data_filename), row.names = FALSE)
       } else {
-        data_filename <- paste0(dataset_name_lower, "_data.fst")
-        fst::write_fst(filtered_df, file.path(temp_dir, data_filename))
+        data_filename <- paste0(dataset_name_lower, "_data.parquet")
+        arrow::write_parquet(filtered_df, file.path(temp_dir, data_filename), compression = "snappy")
       }
     } else {
       write.csv(data.frame(), file.path(temp_dir, data_filename), row.names = FALSE)
     }
+    
     
     meta_file_name <- "metadata.xlsx"
     meta_file_full_path <- file.path(temp_dir, meta_file_name)
@@ -2886,11 +2890,11 @@ server <- function(input, output, session) {
       "##### Load Data #####"
     )
     
-    if (grepl("\\.fst$", data_filename)) {
+    if (grepl("\\.parquet$", data_filename)) {
       code_content <- c(code_content,
-                        "if (!requireNamespace('fst', quietly = TRUE)) install.packages('fst')",
-                        "library(fst)",
-                        paste0(dataset_name_lower, "_data <- fst::read.fst('", data_filename, "')"))
+                        "if (!requireNamespace('arrow', quietly = TRUE)) install.packages('arrow')",
+                        "library(arrow)",
+                        paste0(dataset_name_lower, "_data <- arrow::read_parquet('", data_filename, "')"))
     } else {
       code_content <- c(code_content,
                         paste0(dataset_name_lower, "_data <- readr::read_csv('", data_filename, "')"))
@@ -2926,76 +2930,121 @@ server <- function(input, output, session) {
     zip::zip(zipfile = file, files = files_to_zip, root = temp_dir)
   }
   
-  output$downloadSTdata <- downloadHandler(
-    filename = "EU-Wide-Stress-Tests-Dataset.fst",
-    content = function(file) {
-      shinyjs::show("loading_gif_st")
-      on.exit(shinyjs::hide("loading_gif_st"))
-      data_to_download <- load_st_data()
-      fst::write_fst(as.data.frame(data_to_download), path = file)
-    }
-  )
-  
-  output$downloadSSMdata <- downloadHandler(
-    filename = "SSM-Stress-Tests-Dataset.fst",
-    content = function(file) {
-      shinyjs::show("loading_gif_st")
-      on.exit(shinyjs::hide("loading_gif_st"))
-      data_to_download <- load_ssm_data()
-      fst::write_fst(as.data.frame(data_to_download), path = file)
-    }
-  )
-  
-  output$downloadTRdata <- downloadHandler(
-    filename = "Transparency-Exercise-Dataset.fst",
-    content = function(file) {
-      shinyjs::show("loading_gif_tr")
-      on.exit(shinyjs::hide("loading_gif_tr"))
-      data_to_download <- load_tr_data()
-      fst::write_fst(as.data.frame(data_to_download), path = file)
-    }
-  )
-  
-  output$downloadMKTData <- downloadHandler(
-    filename = "Market-Risk-Dataset.fst",
+  output$downloadPLCdata <- downloadHandler(
+    filename = "Profit-Losses-Capital-Dataset.parquet",
     content = function(file) {
       shinyjs::show("loading_gif_th")
       on.exit(shinyjs::hide("loading_gif_th"))
-      data_to_download <- load_eba_market_data()
-      fst::write_fst(as.data.frame(data_to_download), path = file)
-    }
-  )
-  
-  output$downloadSOVData <- downloadHandler(
-    filename = "Sovereign-Exposure-Dataset.fst",
-    content = function(file) {
-      shinyjs::show("loading_gif_th")
-      on.exit(shinyjs::hide("loading_gif_th"))
-      data_to_download <- load_eba_sovereign_data()
-      fst::write_fst(as.data.frame(data_to_download), path = file)
+      
+      # DuckDB COPY command requires the full path in the query string
+      query <- sprintf("COPY plc_data_table TO '%s' (FORMAT 'parquet')", file)
+      dbExecute(con, query)
     }
   )
   
   output$downloadEXPData <- downloadHandler(
-    filename = "Sector-Exposure-Dataset.fst",
+    filename = "Sector-Exposure-Dataset.parquet",
     content = function(file) {
       shinyjs::show("loading_gif_th")
       on.exit(shinyjs::hide("loading_gif_th"))
-      data_to_download <- load_eba_exposure_data()
-      fst::write_fst(as.data.frame(data_to_download), path = file)
+      
+      query <- sprintf("COPY exp_data_table TO '%s' (FORMAT 'parquet')", file)
+      dbExecute(con, query)
     }
   )
   
-  output$downloadPLCdata <- downloadHandler(  # Changed from downloadFilteredData_plc
-    filename = "Profit-Losses-Capital-Dataset.fst",
+  output$downloadSOVData <- downloadHandler(
+    filename = "Sovereign-Exposure-Dataset.parquet",
     content = function(file) {
       shinyjs::show("loading_gif_th")
       on.exit(shinyjs::hide("loading_gif_th"))
-      data_to_download <- load_eba_plc_data()
-      fst::write_fst(as.data.frame(data_to_download), path = file)
+      
+      query <- sprintf("COPY sov_data_table TO '%s' (FORMAT 'parquet')", file)
+      dbExecute(con, query)
     }
   )
   
+  output$downloadMKTData <- downloadHandler(
+    filename = "Market-Risk-Dataset.parquet",
+    content = function(file) {
+      shinyjs::show("loading_gif_th")
+      on.exit(shinyjs::hide("loading_gif_th"))
+      
+      query <- sprintf("COPY mkt_data_table TO '%s' (FORMAT 'parquet')", file)
+      dbExecute(con, query)
+    }
+  )
+  
+  # output$downloadSTdata <- downloadHandler(
+  #   filename = "EU-Wide-Stress-Tests-Dataset.fst",
+  #   content = function(file) {
+  #     shinyjs::show("loading_gif_st")
+  #     on.exit(shinyjs::hide("loading_gif_st"))
+  #     data_to_download <- load_st_data()
+  #     fst::write_fst(as.data.frame(data_to_download), path = file)
+  #   }
+  # )
+  # 
+  # output$downloadSSMdata <- downloadHandler(
+  #   filename = "SSM-Stress-Tests-Dataset.fst",
+  #   content = function(file) {
+  #     shinyjs::show("loading_gif_st")
+  #     on.exit(shinyjs::hide("loading_gif_st"))
+  #     data_to_download <- load_ssm_data()
+  #     fst::write_fst(as.data.frame(data_to_download), path = file)
+  #   }
+  # )
+  # 
+  # output$downloadTRdata <- downloadHandler(
+  #   filename = "Transparency-Exercise-Dataset.fst",
+  #   content = function(file) {
+  #     shinyjs::show("loading_gif_tr")
+  #     on.exit(shinyjs::hide("loading_gif_tr"))
+  #     data_to_download <- load_tr_data()
+  #     fst::write_fst(as.data.frame(data_to_download), path = file)
+  #   }
+  # )
+  # 
+  # output$downloadMKTData <- downloadHandler(
+  #   filename = "Market-Risk-Dataset.fst",
+  #   content = function(file) {
+  #     shinyjs::show("loading_gif_th")
+  #     on.exit(shinyjs::hide("loading_gif_th"))
+  #     data_to_download <- load_eba_market_data()
+  #     fst::write_fst(as.data.frame(data_to_download), path = file)
+  #   }
+  # )
+  # 
+  # output$downloadSOVData <- downloadHandler(
+  #   filename = "Sovereign-Exposure-Dataset.fst",
+  #   content = function(file) {
+  #     shinyjs::show("loading_gif_th")
+  #     on.exit(shinyjs::hide("loading_gif_th"))
+  #     data_to_download <- load_eba_sovereign_data()
+  #     fst::write_fst(as.data.frame(data_to_download), path = file)
+  #   }
+  # )
+  # 
+  # output$downloadEXPData <- downloadHandler(
+  #   filename = "Sector-Exposure-Dataset.fst",
+  #   content = function(file) {
+  #     shinyjs::show("loading_gif_th")
+  #     on.exit(shinyjs::hide("loading_gif_th"))
+  #     data_to_download <- load_eba_exposure_data()
+  #     fst::write_fst(as.data.frame(data_to_download), path = file)
+  #   }
+  # )
+  # 
+  # output$downloadPLCdata <- downloadHandler(  # Changed from downloadFilteredData_plc
+  #   filename = "Profit-Losses-Capital-Dataset.fst",
+  #   content = function(file) {
+  #     shinyjs::show("loading_gif_th")
+  #     on.exit(shinyjs::hide("loading_gif_th"))
+  #     data_to_download <- load_eba_plc_data()
+  #     fst::write_fst(as.data.frame(data_to_download), path = file)
+  #   }
+  # )
+  # 
   output$downloadBDSData <- downloadHandler(
     filename = "Bank-Distress-Dataset.xlsx",
     content = function(file) {
@@ -3005,16 +3054,61 @@ server <- function(input, output, session) {
     }
   )
   
-  output$downloadRPSData <- downloadHandler(  # Changed from downloadFilteredData_rps
-    filename = "Risk-Parameters-Dataset.fst",
+  output$downloadRPSData <- downloadHandler(
+    filename = "Risk-Parameters-Dataset.parquet",
     content = function(file) {
       shinyjs::show("loading_gif_th")
       on.exit(shinyjs::hide("loading_gif_th"))
-      data_to_download <- risk_parameters()
-      fst::write_fst(as.data.frame(data_to_download), path = file)
+      
+      query <- sprintf("COPY rps_data_table TO '%s' (FORMAT 'parquet')", file)
+      dbExecute(con, query)
     }
   )
   
+  
+  # output$downloadRPSData <- downloadHandler(  # Changed from downloadFilteredData_rps
+  #   filename = "Risk-Parameters-Dataset.fst",
+  #   content = function(file) {
+  #     shinyjs::show("loading_gif_th")
+  #     on.exit(shinyjs::hide("loading_gif_th"))
+  #     data_to_download <- risk_parameters()
+  #     fst::write_fst(as.data.frame(data_to_download), path = file)
+  #   }
+  # )
+  
+  output$downloadSTdata <- downloadHandler(
+    filename = "EU-Wide-Stress-Tests-Dataset.parquet",
+    content = function(file) {
+      shinyjs::show("loading_gif_st")
+      on.exit(shinyjs::hide("loading_gif_st"))
+      
+      # Export directly from DuckDB to Parquet
+      query <- "COPY st_data_table TO ? (FORMAT 'parquet')"
+      dbExecute(con, query, list(file))
+    }
+  )
+  
+  output$downloadSSMdata <- downloadHandler(
+    filename = "SSM-Stress-Tests-Dataset.parquet",
+    content = function(file) {
+      shinyjs::show("loading_gif_st")
+      on.exit(shinyjs::hide("loading_gif_st"))
+      
+      query <- "COPY ssm_data_table TO ? (FORMAT 'parquet')"
+      dbExecute(con, query, list(file))
+    }
+  )
+  
+  output$downloadTRdata <- downloadHandler(
+    filename = "Transparency-Exercise-Dataset.parquet",
+    content = function(file) {
+      shinyjs::show("loading_gif_tr")
+      on.exit(shinyjs::hide("loading_gif_tr"))
+      
+      query <- "COPY tr_data_table TO ? (FORMAT 'parquet')"
+      dbExecute(con, query, list(file))
+    }
+  )
   
   # Helper function to generate simple R loading script
   generate_simple_r_script <- function(filename_with_extension) {
@@ -3028,7 +3122,7 @@ server <- function(input, output, session) {
       'path_to_dataset <- ""  # Enter the full path to your file here',
       "",
       "# Install and load required packages",
-      "required_packages <- c('fst', 'readr')",
+      "required_packages <- c('arrow', 'readr')",
       "install_if_missing <- function(packages) {",
       "  new_packages <- packages[!(packages %in% installed.packages()[, 'Package'])]",
       "  if (length(new_packages)) {",
@@ -3037,20 +3131,20 @@ server <- function(input, output, session) {
       "}",
       "install_if_missing(required_packages)",
       "",
-      "library(fst)",
+      "library(arrow)",
       "library(readr)",
       "",
       "# Load the dataset based on file extension",
       "file_ext <- tools::file_ext(path_to_dataset)",
       "",
-      "if (file_ext == 'fst') {",
-      "  data <- read.fst(path_to_dataset)",
-      "  cat('Loaded data from FST file\\n')",
+      "if (file_ext == 'parquet') {",
+      "  data <- arrow::read_parquet(path_to_dataset)",
+      "  cat('Loaded data from Parquet file\\n')",
       "} else if (file_ext == 'csv') {",
       "  data <- read_csv(path_to_dataset)",
       "  cat('Loaded data from CSV file\\n')",
       "} else {",
-      "  stop('Unsupported file format. Please use .fst or .csv files.')",
+      "  stop('Unsupported file format. Please use .parquet or .csv files.')",
       "}",
       "",
       "# Display first few rows",
@@ -3058,13 +3152,13 @@ server <- function(input, output, session) {
     )
     
     return(code_content)
-  }
+  } 
   
-  # Filtered ST data download
+  
   output$downloadFilteredData_st <- downloadHandler(
     filename = function() { 
       type <- isolate(active_st_dataset_type())
-      ext <- if (nrow(isolate(display_st_data())) >= 500000) ".fst" else ".csv"
+      ext <- if (nrow(isolate(display_st_data())) >= 500000) ".parquet" else ".csv"
       if (is.null(type)) {
         paste0("filtered_stress_test_data_", Sys.Date(), ext)
       } else if (type == "SSM") {
@@ -3084,15 +3178,17 @@ server <- function(input, output, session) {
       if (nrow(filtered_df) < 500000) {
         write.csv(filtered_df, file, row.names = FALSE)
       } else {
-        fst::write_fst(filtered_df, file)
+        arrow::write_parquet(filtered_df, file, compression = "snappy")
       }
     }
   )
   
+  
+  
   # Filtered TR data download
   output$downloadFilteredData_tr <- downloadHandler(
     filename = function() {
-      ext <- if (nrow(isolate(display_tr_data())) >= 500000) ".fst" else ".csv"
+      ext <- if (nrow(isolate(display_tr_data())) >= 500000) ".parquet" else ".csv"
       paste0("filtered_transparency_data_", Sys.Date(), ext)
     },
     content = function(file) {
@@ -3106,7 +3202,7 @@ server <- function(input, output, session) {
       if (nrow(filtered_df) < 500000) {
         write.csv(filtered_df, file, row.names = FALSE)
       } else {
-        fst::write_fst(filtered_df, file)
+        arrow::write_parquet(filtered_df, file, compression = "snappy")
       }
     }
   )
@@ -3116,7 +3212,7 @@ server <- function(input, output, session) {
     filename = function() {
       type <- isolate(active_th_dataset_type())
       dataset_name_lower <- if (is.null(type)) "thematic" else tolower(type)
-      ext <- if (nrow(isolate(display_th_data())) >= 500000) ".fst" else ".csv"
+      ext <- if (nrow(isolate(display_th_data())) >= 500000) ".parquet" else ".csv"
       paste0("filtered_", dataset_name_lower, "_data_", Sys.Date(), ext)
     },
     content = function(file) {
@@ -3138,10 +3234,13 @@ server <- function(input, output, session) {
       if (nrow(filtered_df) < 500000) {
         write.csv(filtered_df, file, row.names = FALSE)
       } else {
-        fst::write_fst(filtered_df, file)
+        arrow::write_parquet(filtered_df, file, compression = "snappy")
       }
     }
   )
+  
+  
+  
   
   # Overview panel downloads
   output$downloadTotalMetadata_overview <- downloadHandler(
@@ -3154,7 +3253,7 @@ server <- function(input, output, session) {
   output$downloadRScript_overview <- downloadHandler(
     filename = "load_EBA_dataset.R",
     content = function(file) {
-      code_content <- generate_simple_r_script("dataset.fst")  # Generic name
+      code_content <- generate_simple_r_script("dataset.parquet")  # Generic name
       writeLines(code_content, file)
     }
   )
@@ -3302,28 +3401,144 @@ server <- function(input, output, session) {
                               "ITM_NII", "ITM_TFL", "ITM_TOTFL", "ITM_54", "ITM_67", 
                               "ITM_50", "ITM_46", "ITM_4")
   
+  # tr_ratios <- reactive({
+  #   req(chart_db())
+  #   chart_db() %>% 
+  #     filter(DB == "tr_ratios") %>% 
+  #     dplyr::select(-DB) %>% 
+  #     select_if(function(x) !(all(is.na(x)) | all(x == ""))) %>% 
+  #     filter(Common_Item %in% available_items_ratios) %>%
+  #     left_join(labels, by = "Common_Item")
+  # })
+  # 
+  # final_waterfall <- reactive({
+  #   req(chart_db())
+  #   chart_db() %>% 
+  #     filter(DB == "final_waterfall") %>% 
+  #     dplyr::select(-DB) %>% 
+  #     select_if(function(x) !(all(is.na(x)) | all(x == "")))
+  # })
+  # 
+  # bank_exp_total <- reactive({
+  #   req(chart_db())
+  #   chart_db() %>% 
+  #     filter(DB == "bank_exp_total") %>% 
+  #     dplyr::select(-DB) %>% 
+  #     select_if(function(x) !(all(is.na(x)) | all(x == ""))) %>%
+  #     distinct() %>%
+  #     pivot_wider(names_from = Framework, values_from = Amount) %>%
+  #     arrange(Bank_ID, ISO2, Period, Country, Common_Exposure) %>%
+  #     mutate(Amount = coalesce(TR, ST), Framework = "TR") %>%
+  #     dplyr::select(-TR, -ST) %>%
+  #     distinct() %>%
+  #     filter(Country != 0) %>%
+  #     group_by(TP, ISO2, Bank_ID, Period, Exercise, Portfolio, Common_Exposure, Country) %>%
+  #     mutate(Amount = sum(Amount, na.rm = TRUE)) %>%
+  #     ungroup() %>%
+  #     mutate(Common_Item = "ITM_SECEXP") %>%
+  #     distinct() %>%
+  #     mutate(Country = factor(Country, as.vector(na.omit(metadata_countries$Label_Country_Final)), 
+  #                             as.vector(na.omit(metadata_countries$Value_Country_Final)))) %>%
+  #     dplyr::select(ISO2, Bank_ID, Name, Period, Country, Common_Exposure, Portfolio, Amount) %>%
+  #     distinct()
+  # })
+  # 
+  # sov_exp <- reactive({
+  #   req(chart_db())
+  #   chart_db() %>% 
+  #     filter(DB == "sov_exp") %>% 
+  #     dplyr::select(-DB) %>% 
+  #     select_if(function(x) !(all(is.na(x)) | all(x == "")))
+  # })
+  # 
+  # bank_nace <- reactive({
+  #   req(chart_db())
+  #   chart_db() %>% 
+  #     filter(DB == "bank_nace") %>% 
+  #     dplyr::select(-DB) %>% 
+  #     select_if(function(x) !(all(is.na(x)) | all(x == "")))
+  # })
+  # 
+  # tr_rwas <- reactive({
+  #   req(chart_db())
+  #   chart_db() %>% 
+  #     filter(DB == "tr_rwas") %>% 
+  #     dplyr::select(-DB) %>% 
+  #     select_if(function(x) !(all(is.na(x)) | all(x == "")))
+  # })
+  # 
+  # tr_assets <- reactive({
+  #   req(chart_db())
+  #   chart_db() %>% 
+  #     filter(DB == "tr_assets") %>% 
+  #     dplyr::select(-DB) %>% 
+  #     select_if(function(x) !(all(is.na(x)) | all(x == "")))
+  # })
+  
+  # Replace the existing observeEvent for chart_db loading
+  observeEvent(input$`main-tabs`, {
+    if(input$`main-tabs` == "Visualisation" && !chart_data_loaded()) {
+      showModal(modalDialog(
+        title = "Loading Visualisation Data",
+        "Preparing chart database...",
+        footer = NULL,
+        easyClose = FALSE
+      ))
+      
+      tryCatch({
+        # DuckDB connection is already established in Global.R
+        chart_data_loaded(TRUE)
+        removeModal()
+      }, error = function(e) {
+        removeModal()
+        showModal(modalDialog(
+          title = "Error",
+          paste("Failed to load chart database:", e$message),
+          footer = modalButton("Close")
+        ))
+      })
+    }
+  }, priority = 100)
+  
+  # Modify reactive chart data to use DuckDB queries (around line 890)
   tr_ratios <- reactive({
-    req(chart_db())
-    chart_db() %>% 
-      filter(DB == "tr_ratios") %>% 
-      dplyr::select(-DB) %>% 
-      select_if(function(x) !(all(is.na(x)) | all(x == ""))) %>% 
+    req(chart_data_loaded())
+    
+    query <- "
+    SELECT * FROM chart_db_table
+    WHERE DB = 'tr_ratios'
+    AND Common_Item IN ('ITM_119', 'ITM_120', 'ITM_121', 'ITM_130', 'ITM_CETFL', 
+                        'ITM_NII', 'ITM_TFL', 'ITM_TOTFL', 'ITM_54', 'ITM_67', 
+                        'ITM_50', 'ITM_46', 'ITM_4')
+  "
+    
+    data <- dbGetQuery(con, query) %>%
+      dplyr::select(-DB) %>%
+      select_if(function(x) !(all(is.na(x)) | all(x == ""))) %>%
       filter(Common_Item %in% available_items_ratios) %>%
       left_join(labels, by = "Common_Item")
+    
+    return(data)
   })
   
+  
   final_waterfall <- reactive({
-    req(chart_db())
-    chart_db() %>% 
+    req(chart_data_loaded())
+    
+    query <- "SELECT * FROM chart_db_table WHERE DB = 'final_waterfall'"
+    data <- dbGetQuery(con, query) %>% 
       filter(DB == "final_waterfall") %>% 
-      dplyr::select(-DB) %>% 
+      dplyr::select(-DB) %>%
       select_if(function(x) !(all(is.na(x)) | all(x == "")))
+    
+    return(data)
   })
   
   bank_exp_total <- reactive({
-    req(chart_db())
-    chart_db() %>% 
-      filter(DB == "bank_exp_total") %>% 
+    req(chart_data_loaded())
+    
+    query <- "SELECT * FROM chart_db_table WHERE DB = 'bank_exp_total'"
+    data <- dbGetQuery(con, query) %>%
       dplyr::select(-DB) %>% 
       select_if(function(x) !(all(is.na(x)) | all(x == ""))) %>%
       distinct() %>%
@@ -3342,39 +3557,58 @@ server <- function(input, output, session) {
                               as.vector(na.omit(metadata_countries$Value_Country_Final)))) %>%
       dplyr::select(ISO2, Bank_ID, Name, Period, Country, Common_Exposure, Portfolio, Amount) %>%
       distinct()
+    
+    return(data)
   })
   
   sov_exp <- reactive({
-    req(chart_db())
-    chart_db() %>% 
+    req(chart_data_loaded())
+    
+    query <- "SELECT * FROM chart_db_table WHERE DB = 'sov_exp'"
+    data <- dbGetQuery(con, query) %>% 
       filter(DB == "sov_exp") %>% 
-      dplyr::select(-DB) %>% 
+      dplyr::select(-DB) %>%
       select_if(function(x) !(all(is.na(x)) | all(x == "")))
+    
+    return(data)
   })
   
   bank_nace <- reactive({
-    req(chart_db())
-    chart_db() %>% 
+    req(chart_data_loaded())
+    
+    query <- "SELECT * FROM chart_db_table WHERE DB = 'bank_nace'"
+    data <- dbGetQuery(con, query) %>% 
       filter(DB == "bank_nace") %>% 
-      dplyr::select(-DB) %>% 
+      dplyr::select(-DB) %>%
       select_if(function(x) !(all(is.na(x)) | all(x == "")))
+    
+    return(data)
   })
   
   tr_rwas <- reactive({
-    req(chart_db())
-    chart_db() %>% 
+    req(chart_data_loaded())
+    
+    query <- "SELECT * FROM chart_db_table WHERE DB = 'tr_rwas'"
+    data <- dbGetQuery(con, query) %>% 
       filter(DB == "tr_rwas") %>% 
-      dplyr::select(-DB) %>% 
+      dplyr::select(-DB) %>%
       select_if(function(x) !(all(is.na(x)) | all(x == "")))
+    
+    return(data)
   })
   
   tr_assets <- reactive({
-    req(chart_db())
-    chart_db() %>% 
+    req(chart_data_loaded())
+    
+    query <- "SELECT * FROM chart_db_table WHERE DB = 'tr_assets'"
+    data <- dbGetQuery(con, query) %>% 
       filter(DB == "tr_assets") %>% 
-      dplyr::select(-DB) %>% 
+      dplyr::select(-DB) %>%
       select_if(function(x) !(all(is.na(x)) | all(x == "")))
+    
+    return(data)
   })
+  
   
   # ============ TAB 1: TIME SERIES ============
   observe({
@@ -4026,13 +4260,13 @@ server <- function(input, output, session) {
     req(bank_exp_total())
     
     countries <- bank_exp_total() %>%   
-    distinct(ISO2) %>%    
-    arrange(ISO2) %>%
-    pull(ISO2)  
-  
+      distinct(ISO2) %>%    
+      arrange(ISO2) %>%
+      pull(ISO2)  
+    
     updateSelectInput(session, "vis_net_country",                    
-                    choices = c("All Countries" = "ALL", countries), 
-                    selected = "ALL") })
+                      choices = c("All Countries" = "ALL", countries), 
+                      selected = "ALL") })
   observe({
     req(input$vis_net_country)  
     req(bank_exp_total())
@@ -4054,7 +4288,7 @@ server <- function(input, output, session) {
   observe({
     req(bank_exp_total())
     req(input$vis_net_exp_type)
-
+    
     
     if(input$vis_net_exp_type == "risk") {
       exposure_choices <- bank_exp_total() %>%
