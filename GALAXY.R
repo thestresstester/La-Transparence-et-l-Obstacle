@@ -4939,7 +4939,7 @@ server <- function(input, output, session) {
     filename = "Create_Charts_DB.R",
     content = function(file) {
       # Path to your Create_Charts_DB.R script
-      script_path <- "Create_Charts_DB.R"  # Adjust this path if the script is in a different location
+      script_path <- "Meta/Functions/Create_Charts_DB.R"  # Adjust this path if the script is in a different location
       
       if (file.exists(script_path)) {
         file.copy(script_path, file, overwrite = TRUE)
