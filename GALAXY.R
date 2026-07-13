@@ -1,11 +1,11 @@
-rm(list = ls())
-cat("\014")
-if (requireNamespace("rstudioapi", quietly = TRUE) && rstudioapi::isAvailable()) {
-  editor_path <- tryCatch(rstudioapi::getSourceEditorContext()$path, error = function(...) "")
-  if (nzchar(editor_path)) {
-    setwd(dirname(editor_path))
-  }
-}
+# rm(list = ls())
+# cat("\014")
+# if (requireNamespace("rstudioapi", quietly = TRUE) && rstudioapi::isAvailable()) {
+#   editor_path <- tryCatch(rstudioapi::getSourceEditorContext()$path, error = function(...) "")
+#   if (nzchar(editor_path)) {
+#     setwd(dirname(editor_path))
+#   }
+# }
 
 library(shiny)
 library(fst)
