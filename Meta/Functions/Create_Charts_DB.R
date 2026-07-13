@@ -335,12 +335,12 @@ tr_ratios = left_join(tr_ratios, bank_names, by = c("Bank_ID"), relationship = "
 
 ##------------------------
 ## Export final datasets
-tr_ratios = tr_ratios %>% 
+tr_ratios_export = tr_ratios %>% 
   mutate(DB = "tr_ratios")
 
 ## %% Chart
 
-tr_ratios = tr_ratios %>% 
+tr_ratios = tr_ratios_export %>% 
   dplyr::select(-DB)
 
 ### %% Time series
@@ -1067,11 +1067,11 @@ final_waterfall = rbind(final_tr, final_fl) %>%
 
 ##------------------------
 ## Export final datasets
-final_waterfall = final_waterfall %>% 
+final_waterfall_export = final_waterfall %>% 
   mutate(DB = "final_waterfall")
 
 ## %% Chart
-final_waterfall = final_waterfall %>% 
+final_waterfall = final_waterfall_export %>% 
   dplyr::select(-DB)
 
 transitional = 0 ## 1 or 0
@@ -1393,16 +1393,16 @@ tr_assets <- left_join(dt_pnl, bank_names, by = c("Bank_ID"), relationship = "ma
 
 ##------------------------
 ## Export final datasets
-tr_rwas = tr_rwas %>% 
+tr_rwas_export = tr_rwas %>% 
   mutate(DB = "tr_rwas")
-tr_assets = tr_assets %>% 
+tr_assets_export = tr_assets %>% 
   mutate(DB = "tr_assets")
 
 ## %% Chart
 
-tr_rwas = tr_rwas %>% 
+tr_rwas = tr_rwas_export %>% 
   dplyr::select(-DB)
-tr_assets = tr_assets %>% 
+tr_assets = tr_assets_export %>% 
   dplyr::select(-DB)
 
 # assets <- c("ITM_493", "ITM_494", "ITM_495", "ITM_496", "ITM_497", "ITM_498", "ITM_499", "ITM_500", "ITM_501", "ITM_65")
@@ -1677,11 +1677,11 @@ bank_exp_total <- rbind(bank_exp_tr, bank_exp_st, bank_exp_tr_C000, bank_exp_st_
 
 ##------------------------
 ## Export final datasets
-bank_exp_total = bank_exp_total %>% 
+bank_exp_total_export = bank_exp_total %>% 
   mutate(DB = "bank_exp_total")
 
 ## %% Chart
-bank_exp_total = bank_exp_total %>% 
+bank_exp_total = bank_exp_total_export %>% 
   dplyr::select(-DB)
 
 exposures_names <- read_xlsx("../Metadata_DB.xlsx", sheet = "Common_Exposure")
@@ -1933,12 +1933,12 @@ sov_exp <- left_join(dt_sov, bank_names, by = c("Bank_ID"), relationship = "many
 
 ##------------------------
 ## Export final datasets
-sov_exp = sov_exp %>% 
+sov_exp_export = sov_exp %>% 
   mutate(DB = "sov_exp")
 
 ## %% Chart
 
-sov_exp = sov_exp %>% 
+sov_exp = sov_exp_export %>% 
   dplyr::select(-DB)
 
 ##-------
@@ -2093,11 +2093,11 @@ bank_nace <- bank_exp_orig %>%
 
 ##------------------------
 ## Export final datasets
-bank_nace = bank_nace %>% 
+bank_nace_export = bank_nace %>% 
   mutate(DB = "bank_nace")
 
 ## %% Chart
-bank_nace = bank_nace %>% 
+bank_nace = bank_nace_export %>% 
   dplyr::select(-DB)
 
 bank = NULL ## "BNP Paribas"
@@ -2237,18 +2237,18 @@ plot_ly(
 ####--------------------------- ##
 #### Export whole final dataset
 
-chart_db = plyr::rbind.fill(tr_ratios, final_waterfall, tr_rwas, tr_assets, bank_exp_total, bank_nace, sov_exp)
+chart_db = plyr::rbind.fill(tr_ratios_export, final_waterfall_export, tr_rwas_export, tr_assets_export, bank_exp_total_export, bank_nace_export, sov_exp_export)
 
 chart_output_dir <- "../Original Data/Chart Data"
 dir.create(chart_output_dir, recursive = TRUE, showWarnings = FALSE)
 
-arrow::write_parquet(tr_ratios, file.path(chart_output_dir, "tr_ratios.parquet"), compression = "snappy")
-arrow::write_parquet(final_waterfall, file.path(chart_output_dir, "final_waterfall.parquet"), compression = "snappy")
-arrow::write_parquet(tr_rwas, file.path(chart_output_dir, "tr_rwas.parquet"), compression = "snappy")
-arrow::write_parquet(tr_assets, file.path(chart_output_dir, "tr_assets.parquet"), compression = "snappy")
-arrow::write_parquet(bank_exp_total, file.path(chart_output_dir, "bank_exp_total.parquet"), compression = "snappy")
-arrow::write_parquet(bank_nace, file.path(chart_output_dir, "bank_nace.parquet"), compression = "snappy")
-arrow::write_parquet(sov_exp, file.path(chart_output_dir, "sov_exp.parquet"), compression = "snappy")
+arrow::write_parquet(tr_ratios_export %>% dplyr::select(-DB), file.path(chart_output_dir, "tr_ratios.parquet"), compression = "snappy")
+arrow::write_parquet(final_waterfall_export %>% dplyr::select(-DB), file.path(chart_output_dir, "final_waterfall.parquet"), compression = "snappy")
+arrow::write_parquet(tr_rwas_export %>% dplyr::select(-DB), file.path(chart_output_dir, "tr_rwas.parquet"), compression = "snappy")
+arrow::write_parquet(tr_assets_export %>% dplyr::select(-DB), file.path(chart_output_dir, "tr_assets.parquet"), compression = "snappy")
+arrow::write_parquet(bank_exp_total_export %>% dplyr::select(-DB), file.path(chart_output_dir, "bank_exp_total.parquet"), compression = "snappy")
+arrow::write_parquet(bank_nace_export %>% dplyr::select(-DB), file.path(chart_output_dir, "bank_nace.parquet"), compression = "snappy")
+arrow::write_parquet(sov_exp_export %>% dplyr::select(-DB), file.path(chart_output_dir, "sov_exp.parquet"), compression = "snappy")
 
 arrow::write_parquet(chart_db, "../Original Data/chart_db.parquet", compression = "snappy")
 
