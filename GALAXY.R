@@ -4475,9 +4475,26 @@ server <- function(input, output, session) {
       "Total Equity",
       "Total Equity and Total Liabilities"
     )
+
+    ensure_item_columns <- function(data, required_columns, fill_value = 0) {
+      missing_columns <- setdiff(required_columns, names(data))
+
+      for (column_name in missing_columns) {
+        data[[column_name]] <- fill_value
+      }
+
+      data
+    }
+
+    rwas_required_columns <- unique(c(rwas_items, "ITM_35"))
+    asset_required_columns <- unique(c(assets_items, liabilities_items))
+
+    rwas_data <- ensure_item_columns(rwas_data, rwas_required_columns)
+    assets_data <- ensure_item_columns(assets_data, asset_required_columns)
     
     # Process RWAs
     rwas_processed <- rwas_data %>%
+      mutate(ITM_35 = dplyr::na_if(ITM_35, 0)) %>%
       mutate(across(c(ITM_405, ITM_410, ITM_411, ITM_412, ITM_30, ITM_414, ITM_418, ITM_33, ITM_34, ITM_700), ~ . / ITM_35)) %>%
       pivot_longer(matches("ITM_"), names_to = "Common_Item", values_to = "Amount") %>%
       mutate(RWA = ifelse(Common_Item %in% rwas_items[which(names(rwas_items) != "Total risk exposure amounts")], 1, NA)) %>%
@@ -4491,6 +4508,10 @@ server <- function(input, output, session) {
     
     # Process Assets
     assets_processed <- assets_data %>%
+      mutate(
+        ITM_65 = dplyr::na_if(ITM_65, 0),
+        ITM_539 = dplyr::na_if(ITM_539, 0)
+      ) %>%
       mutate(across(c(ITM_493, ITM_494, ITM_497, ITM_498, ITM_501), ~ . / ITM_65)) %>%
       mutate(across(c(ITM_523, ITM_525, ITM_526, ITM_531, ITM_533, ITM_538), ~ . / ITM_539)) %>%
       pivot_longer(matches("ITM_"), names_to = "Common_Item", values_to = "Amount") %>%
