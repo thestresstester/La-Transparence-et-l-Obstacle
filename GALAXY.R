@@ -1216,14 +1216,47 @@ server <- function(input, output, session) {
     sprintf("c(%s)", paste(vapply(values, function(value) deparse(value), character(1)), collapse = ", "))
   }
 
+  split_top_level_or_clause <- function(clause) {
+    chars <- strsplit(clause, "", fixed = TRUE)[[1]]
+    depth <- 0L
+
+    if (length(chars) < 4) {
+      return(NULL)
+    }
+
+    for (index in seq_len(length(chars) - 3L)) {
+      current_char <- chars[[index]]
+
+      if (current_char == "(") {
+        depth <- depth + 1L
+      } else if (current_char == ")") {
+        depth <- depth - 1L
+      }
+
+      if (
+        depth == 1L &&
+        chars[[index]] == " " &&
+        chars[[index + 1L]] == "O" &&
+        chars[[index + 2L]] == "R" &&
+        chars[[index + 3L]] == " "
+      ) {
+        return(c(
+          trimws(substr(clause, 2L, index - 1L)),
+          trimws(substr(clause, index + 4L, nchar(clause) - 1L))
+        ))
+      }
+    }
+
+    NULL
+  }
+
   sql_clause_to_dplyr_filter <- function(clause) {
     trimmed_clause <- trimws(clause)
 
     if (startsWith(trimmed_clause, "(") && endsWith(trimmed_clause, ")") && grepl(" OR ", trimmed_clause, fixed = TRUE)) {
-      inner_clause <- substring(trimmed_clause, 2, nchar(trimmed_clause) - 1)
-      or_parts <- strsplit(inner_clause, " OR ", fixed = TRUE)[[1]]
+      or_parts <- split_top_level_or_clause(trimmed_clause)
 
-      if (length(or_parts) == 2) {
+      if (!is.null(or_parts) && length(or_parts) == 2) {
         left_expr <- sql_clause_to_dplyr_filter(or_parts[[1]])
         right_expr <- sql_clause_to_dplyr_filter(or_parts[[2]])
         return(sprintf("(%s) | (%s)", left_expr, right_expr))
