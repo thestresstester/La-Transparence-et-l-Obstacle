@@ -1278,7 +1278,7 @@ server <- function(input, output, session) {
       paste0("output_filename <- ", deparse(output_filename)),
       "",
       "full_data <- arrow::read_parquet(path_to_full_dataset)",
-      "filtered_data <- full_data"
+      "filtered_data <- full_data",
       "",
       if (length(dplyr_filters) > 0) {
         vapply(dplyr_filters, function(filter_expr) {
