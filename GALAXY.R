@@ -4287,7 +4287,7 @@ server <- function(input, output, session) {
               Country_Label = as.character(Value_Country_Final)
             ) %>%
             distinct(),
-          by = "Country"
+          by = "Country", relationship = "many-to-many"
         ) %>%
         mutate(Country = coalesce(Country_Label, Country)) %>%
         dplyr::select(-Country_Label)
