@@ -778,11 +778,7 @@ ui <- fluidPage(
                                                                                        "[2Y-3Y]" = 4, "[3Y-5Y]" = 5, "[5Y-10Y]" = 6, 
                                                                                        "[10Y+]" = 7, "Total" = 8), selected = 8)
                                                              ),
-                                                             actionButton("load_network", "Load Network", class = "btn btn-default"),
-                                                             div(class = "button-container",
-                                                                 tags$p(style = "font-weight: bold;", "Center Network"),
-                                                                 actionButton("center_network", icon("crosshairs", style = "color: #BF9F66; font-size: 2.0em;"), class = "circle-button")
-                                                             )
+                                                             uiOutput("network_action_controls")
                                                          )
                                                   ),
                                                   column(9,
@@ -3972,6 +3968,40 @@ server <- function(input, output, session) {
   })
   
   # ============ TAB 4: NETWORK ============
+
+  output$network_action_controls <- renderUI({
+    req(input$vis_net_exp_type)
+
+    if (identical(input$vis_net_exp_type, "risk")) {
+      div(
+        style = "display: flex; justify-content: center; align-items: flex-start; gap: 20px;",
+        div(
+          class = "button-container",
+          tags$p(style = "font-weight: bold;", "Load Network"),
+          actionButton("load_network", "Load Network", class = "btn btn-default")
+        ),
+        div(
+          class = "button-container",
+          tags$p(style = "font-weight: bold;", "Center Network"),
+          actionButton("center_network", icon("crosshairs", style = "color: #BF9F66; font-size: 2.0em;"), class = "circle-button")
+        )
+      )
+    } else {
+      tagList(
+        div(style = "height: 20px;"),
+        div(
+          class = "button-container",
+          tags$p(style = "font-weight: bold;", "Load Network"),
+          actionButton("load_network", "Load Network", class = "btn btn-default")
+        ),
+        div(
+          class = "button-container",
+          tags$p(style = "font-weight: bold;", "Center Network"),
+          actionButton("center_network", icon("crosshairs", style = "color: #BF9F66; font-size: 2.0em;"), class = "circle-button")
+        )
+      )
+    }
+  })
   
   network_chart_key <- reactive({
     if (identical(input$vis_net_exp_type, "risk")) {
