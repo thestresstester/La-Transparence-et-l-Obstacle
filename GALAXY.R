@@ -8,7 +8,6 @@
 # }
 
 library(shiny)
-library(fst)
 library(shinyjs)
 library(shinybusy)
 library(DT)
@@ -779,6 +778,7 @@ ui <- fluidPage(
                                                                                        "[2Y-3Y]" = 4, "[3Y-5Y]" = 5, "[5Y-10Y]" = 6, 
                                                                                        "[10Y+]" = 7, "Total" = 8), selected = 8)
                                                              ),
+                                                             actionButton("load_network", "Load Network", class = "btn btn-default"),
                                                              div(class = "button-container",
                                                                  tags$p(style = "font-weight: bold;", "Center Network"),
                                                                  actionButton("center_network", icon("crosshairs", style = "color: #BF9F66; font-size: 2.0em;"), class = "circle-button")
@@ -1382,6 +1382,21 @@ server <- function(input, output, session) {
     dbGetQuery(con, query)
   }
 
+  load_chart_dataset_where <- function(chart_key, columns = "*", where_clauses = character()) {
+    chart_spec <- get_chart_view_spec(chart_key)
+
+    query <- if (length(columns) == 1 && identical(columns, "*")) {
+      build_select_query(chart_spec$view, where_clauses)
+    } else {
+      paste(
+        "SELECT", paste(columns, collapse = ", "), "FROM", chart_spec$view,
+        if (length(where_clauses) > 0) paste("WHERE", paste(where_clauses, collapse = " AND ")) else ""
+      )
+    }
+
+    dbGetQuery(con, query)
+  }
+
   load_enabled_chart_dataset <- function(chart_key, columns = "*") {
     req(chart_data_loaded())
     req(chart_dataset_enabled(chart_key))
@@ -1389,6 +1404,69 @@ server <- function(input, output, session) {
     load_chart_dataset(chart_key, columns) %>%
       dplyr::select(-any_of("DB")) %>%
       select_if(function(x) !(all(is.na(x)) | all(x == "")))
+  }
+
+  load_enabled_chart_dataset_where <- function(chart_key, columns = "*", where_clauses = character()) {
+    req(chart_data_loaded())
+    req(chart_dataset_enabled(chart_key))
+
+    load_chart_dataset_where(chart_key, columns, where_clauses) %>%
+      dplyr::select(-any_of("DB")) %>%
+      select_if(function(x) !(all(is.na(x)) | all(x == "")))
+  }
+
+  load_chart_distinct_values <- function(chart_key, column, where_clauses = character(), descending = FALSE) {
+    req(chart_data_loaded())
+    req(chart_dataset_enabled(chart_key))
+
+    chart_spec <- get_chart_view_spec(chart_key)
+    query <- paste(
+      "SELECT DISTINCT", column, "FROM", chart_spec$view,
+      if (length(where_clauses) > 0) paste("WHERE", paste(where_clauses, collapse = " AND ")) else "",
+      "ORDER BY", column, if (descending) "DESC" else "ASC"
+    )
+
+    values <- dbGetQuery(con, query)[[column]]
+    values <- values[!is.na(values)]
+
+    if (is.character(values)) {
+      values <- values[values != ""]
+    }
+
+    values
+  }
+
+  build_network_where_clauses <- function(country = NULL, bank = NULL, exposure = NULL,
+                                          maturity = NULL, period = NULL, portfolio = NULL) {
+    where_clauses <- character()
+
+    if (!is.null(country) && !identical(country, "ALL")) {
+      where_clauses <- c(where_clauses, sprintf("ISO2 = '%s'", escape_sql_string(country)))
+    }
+
+    if (!is.null(bank) && !identical(bank, "ALL")) {
+      where_clauses <- c(where_clauses, sprintf("Name = '%s'", escape_sql_string(bank)))
+    }
+
+    if (!is.null(exposure) && nzchar(exposure)) {
+      where_clauses <- c(where_clauses, sprintf("Common_Exposure = '%s'", escape_sql_string(exposure)))
+    }
+
+    if (!is.null(maturity) && nzchar(as.character(maturity))) {
+      where_clauses <- c(where_clauses, sprintf("Maturity = %s", as.integer(maturity)))
+    }
+
+    if (!is.null(period) && nzchar(as.character(period))) {
+      where_clauses <- c(where_clauses, sprintf("Period = %s", as.numeric(period)))
+    }
+
+    if (!is.null(portfolio) && identical(portfolio, "IRB")) {
+      where_clauses <- c(where_clauses, "Portfolio = 2")
+    } else if (!is.null(portfolio) && identical(portfolio, "Standardised")) {
+      where_clauses <- c(where_clauses, "Portfolio = 1")
+    }
+
+    where_clauses
   }
 
   load_standard_thematic_dataset <- function(type, country_choices, bank_choices) {
@@ -3895,108 +3973,188 @@ server <- function(input, output, session) {
   
   # ============ TAB 4: NETWORK ============
   
-  observe({   
-    req(bank_exp_total())
-    
-    countries <- bank_exp_total() %>%   
-      distinct(ISO2) %>%    
-      arrange(ISO2) %>%
-      pull(ISO2)  
-    
-    updateSelectInput(session, "vis_net_country",                    
-                      choices = c("All Countries" = "ALL", countries), 
-                      selected = "ALL") })
-  observe({
-    req(input$vis_net_country)  
-    req(bank_exp_total())
-    
-    if(input$vis_net_country != "ALL") {   
-      banks <- bank_exp_total() %>%     
-        filter(ISO2 == input$vis_net_country) %>%
-        distinct(Name) %>%  
-        arrange(Name) %>%  
-        pull(Name)  
-      updateSelectInput(session, "vis_net_bank",    
-                        choices = c("All Banks (Aggregate)" = "ALL", banks),      
-                        selected = "ALL")   } else {     updateSelectInput(session, "vis_net_bank",     
-                                                                           choices = c("All Banks (Aggregate)" = "ALL"),      
-                                                                           selected = "ALL")   
-                        } 
-  }) 
-  
-  observe({
-    req(bank_exp_total())
-    req(input$vis_net_exp_type)
-    
-    
-    if(input$vis_net_exp_type == "risk") {
-      exposure_choices <- bank_exp_total() %>%
-        distinct(Common_Exposure) %>%
-        left_join(exposures_names %>% select(Common_Exposure, Exposure_Label), 
-                  by = "Common_Exposure") %>%
-        arrange(Common_Exposure)
-      
-      choices <- setNames(exposure_choices$Common_Exposure, 
-                          exposure_choices$Exposure_Label)
-      
-      updateSelectInput(session, "vis_net_exposure",
-                        choices = choices,
-                        selected = exposure_choices$Common_Exposure[1])
+  network_chart_key <- reactive({
+    if (identical(input$vis_net_exp_type, "risk")) {
+      "bank_exp_total"
+    } else {
+      "sov_exp"
     }
   })
-  
+
   observe({
     req(input$vis_net_exp_type)
-    
-    if(input$vis_net_exp_type == "risk") {
-      req(bank_exp_total())
-      periods <- bank_exp_total() %>%
-        distinct(Period) %>%
-        arrange(desc(Period)) %>%
-        pull(Period)
-    } else {
-      req(sov_exp())
-      periods <- sov_exp() %>%
-        distinct(Period) %>%
-        arrange(desc(Period)) %>%
-        pull(Period)
+    req(chart_data_loaded())
+    req(chart_dataset_enabled(network_chart_key()))
+
+    countries <- load_chart_distinct_values(network_chart_key(), "ISO2")
+    countries <- sort(setdiff(as.character(countries), "Other"))
+
+    updateSelectInput(session, "vis_net_country",
+                      choices = c("All Countries" = "ALL", countries),
+                      selected = "ALL")
+  })
+
+  observe({
+    req(input$vis_net_exp_type, input$vis_net_country)
+    req(chart_data_loaded())
+    req(chart_dataset_enabled(network_chart_key()))
+
+    if (identical(input$vis_net_country, "ALL")) {
+      updateSelectInput(session, "vis_net_bank",
+                        choices = c("All Banks (Aggregate)" = "ALL"),
+                        selected = "ALL")
+      return()
     }
-    
+
+    banks <- load_chart_distinct_values(
+      network_chart_key(),
+      "Name",
+      build_network_where_clauses(country = input$vis_net_country)
+    )
+
+    updateSelectInput(session, "vis_net_bank",
+                      choices = c("All Banks (Aggregate)" = "ALL", as.character(banks)),
+                      selected = "ALL")
+  })
+
+  observe({
+    req(input$vis_net_exp_type)
+
+    if (input$vis_net_exp_type == "risk") {
+      req(chart_data_loaded())
+      req(chart_dataset_enabled("bank_exp_total"))
+
+      exposure_values <- load_chart_distinct_values(
+        "bank_exp_total",
+        "Common_Exposure",
+        build_network_where_clauses(country = input$vis_net_country, bank = input$vis_net_bank)
+      )
+
+      exposure_choices <- tibble(Common_Exposure = as.character(exposure_values)) %>%
+        left_join(exposures_names %>% select(Common_Exposure, Exposure_Label),
+                  by = "Common_Exposure") %>%
+        mutate(Exposure_Label = coalesce(Exposure_Label, Common_Exposure)) %>%
+        arrange(Common_Exposure)
+
+      choices <- setNames(exposure_choices$Common_Exposure,
+                          exposure_choices$Exposure_Label)
+
+      updateSelectInput(session, "vis_net_exposure",
+                        choices = choices,
+                        selected = if (nrow(exposure_choices) > 0) exposure_choices$Common_Exposure[1] else NULL)
+    }
+  })
+
+  observe({
+    req(input$vis_net_exp_type)
+
+    if (input$vis_net_exp_type == "risk") {
+      req(input$vis_net_exposure, input$vis_net_portfolio)
+      req(chart_data_loaded())
+      req(chart_dataset_enabled("bank_exp_total"))
+
+      periods <- load_chart_distinct_values(
+        "bank_exp_total",
+        "Period",
+        build_network_where_clauses(
+          country = input$vis_net_country,
+          bank = input$vis_net_bank,
+          exposure = input$vis_net_exposure,
+          portfolio = input$vis_net_portfolio
+        ),
+        descending = TRUE
+      )
+    } else {
+      req(input$vis_net_maturity)
+      req(chart_data_loaded())
+      req(chart_dataset_enabled("sov_exp"))
+
+      periods <- load_chart_distinct_values(
+        "sov_exp",
+        "Period",
+        build_network_where_clauses(
+          country = input$vis_net_country,
+          bank = input$vis_net_bank,
+          maturity = input$vis_net_maturity
+        ),
+        descending = TRUE
+      )
+    }
+
+    if (length(periods) == 0) {
+      updateSelectInput(session, "vis_net_period", choices = character(0), selected = NULL)
+      return()
+    }
+
     period_choices <- setNames(periods, sapply(periods, convert_to_quarter))
-    
+
     updateSelectInput(session, "vis_net_period",
                       choices = period_choices,
                       selected = periods[1])
   })
-  
-  net_filtered_data <- reactive({
+
+  network_selection <- eventReactive(input$load_network, {
     req(input$vis_net_period, input$vis_net_exp_type)
-    
-    
-    if(input$vis_net_exp_type == "risk") {
+
+    if (identical(input$vis_net_exp_type, "risk")) {
       req(input$vis_net_portfolio, input$vis_net_exposure)
-      
-      data <- bank_exp_total() %>%
-        filter(Common_Exposure == input$vis_net_exposure)
-      
-      if(input$vis_net_bank != "ALL") {
-        data <- data %>% filter(Name == input$vis_net_bank)
-      } else if(input$vis_net_country != "ALL") {
-        data <- data %>% filter(ISO2 == input$vis_net_country)
-      }
-      
-      if(input$vis_net_portfolio == "Total") {
+    } else {
+      req(input$vis_net_maturity)
+    }
+
+    list(
+      exp_type = input$vis_net_exp_type,
+      country = input$vis_net_country,
+      bank = input$vis_net_bank,
+      period = input$vis_net_period,
+      portfolio = input$vis_net_portfolio,
+      exposure = input$vis_net_exposure,
+      maturity = input$vis_net_maturity
+    )
+  })
+
+  net_filtered_data <- reactive({
+    selection <- network_selection()
+    req(selection)
+
+    if (selection$exp_type == "risk") {
+      risk_columns <- c(
+        "TP", "ISO2", "Bank_ID", "Name", "Period", "Exercise", "Portfolio",
+        "Common_Exposure", "Country", "Framework", "Amount"
+      )
+
+      data <- load_enabled_chart_dataset_where(
+        "bank_exp_total",
+        risk_columns,
+        build_network_where_clauses(
+          country = selection$country,
+          bank = selection$bank,
+          exposure = selection$exposure,
+          period = selection$period
+        )
+      ) %>%
+        distinct() %>%
+        pivot_wider(names_from = Framework, values_from = Amount) %>%
+        arrange(Bank_ID, ISO2, Period, Country, Common_Exposure) %>%
+        mutate(Amount = coalesce(TR, ST), Framework = "TR") %>%
+        dplyr::select(-any_of(c("TR", "ST"))) %>%
+        distinct() %>%
+        filter(Country != 0)
+
+      if (selection$portfolio == "Total") {
+        name_lookup <- data %>% distinct(ISO2, Bank_ID, Name)
+
         data <- data %>%
           mutate(Portfolio = 0) %>%
           group_by(ISO2, Bank_ID, Period, Portfolio, Common_Exposure, Country) %>%
           summarise(Amount = sum(Amount, na.rm = TRUE), .groups = "drop") %>%
-          left_join(bank_exp_total() %>% distinct(ISO2, Bank_ID, Name), by = c("ISO2", "Bank_ID"))
-      } else if(input$vis_net_portfolio == "IRB") {
+          left_join(name_lookup, by = c("ISO2", "Bank_ID"))
+      } else if (selection$portfolio == "IRB") {
         data <- data %>% filter(Portfolio == 2)
       } else {
         data <- data %>% filter(Portfolio == 1)
       }
-      
+
       network_dta <- data %>%
         group_by(Period) %>%
         mutate(REA_all = sum(Amount, na.rm = TRUE)) %>%
@@ -4005,20 +4163,20 @@ server <- function(input, output, session) {
         mutate(Share_all = Amount / REA_all) %>%
         filter(ISO2 != "Other") %>%
         filter(Share_all > 0)
-      
     } else {
-      req(input$vis_net_maturity)
-      req(sov_exp())
-      
-      data <- sov_exp() %>%
-        filter(Maturity == as.numeric(input$vis_net_maturity))
-      
-      if(input$vis_net_bank != "ALL") {
-        data <- data %>% filter(Name == input$vis_net_bank)
-      } else if(input$vis_net_country != "ALL") {
-        data <- data %>% filter(ISO2 == input$vis_net_country)
-      }
-      
+      sovereign_columns <- c("ISO2", "Bank_ID", "Name", "Period", "Country", "Maturity", "Amount")
+
+      data <- load_enabled_chart_dataset_where(
+        "sov_exp",
+        sovereign_columns,
+        build_network_where_clauses(
+          country = selection$country,
+          bank = selection$bank,
+          maturity = selection$maturity,
+          period = selection$period
+        )
+      )
+
       network_dta <- data %>%
         group_by(Period) %>%
         mutate(Exp_all = sum(Amount, na.rm = TRUE)) %>%
@@ -4028,29 +4186,34 @@ server <- function(input, output, session) {
         filter(ISO2 != "Other") %>%
         filter(Share_all > 0)
     }
-    
+
     network_dta
   })
-  
+
   output$vis_network <- renderVisNetwork({
-    data <- net_filtered_data()
-    data <- data %>% filter(Period == input$vis_net_period)
-    
-    bank_stat <- c("Austria", "Belgium", "Bulgaria", "Cyprus", "Germany", "Denmark", "Estonia", 
-                   "Spain", "Finland", "France", "United Kingdom", "Greece", "Hungary", "Ireland", 
-                   "Iceland", "Italy", "Liechtenstein", "Lithuania", "Luxembourg", "Slovenia", 
-                   "Latvia", "Malta", "Netherlands", "Norway", "Poland", "Portugal", "Romania", 
+    selection <- network_selection()
+    validate(need(!is.null(selection), "Select filters and click Load Network."))
+
+    data <- net_filtered_data() %>%
+      filter(Period == selection$period)
+
+    validate(need(nrow(data) > 0, "No network data available for the selected filters."))
+
+    bank_stat <- c("Austria", "Belgium", "Bulgaria", "Cyprus", "Germany", "Denmark", "Estonia",
+                   "Spain", "Finland", "France", "United Kingdom", "Greece", "Hungary", "Ireland",
+                   "Iceland", "Italy", "Liechtenstein", "Lithuania", "Luxembourg", "Slovenia",
+                   "Latvia", "Malta", "Netherlands", "Norway", "Poland", "Portugal", "Romania",
                    "Sweden", "Other")
-    
+
     size_data <- data %>%
       select(Country, Share_all) %>%
       group_by(Country) %>%
       summarise(Share_all = sum(Share_all, na.rm = TRUE), .groups = "drop")
-    
+
     structure <- unique(c(data$Name, as.character(data$Country)))
     size <- size_data %>%
       right_join(data.frame(Country = structure), by = "Country")
-    
+
     nodes <- size %>%
       mutate(id = Country) %>%
       rename(label = Country) %>%
@@ -4062,12 +4225,12 @@ server <- function(input, output, session) {
         id = as.character(id),
         label = as.character(label),
         title = paste0("Share of Exposure: ", round(value, 2), "%"),
-        title = ifelse(group == "Banks", 
-                       ifelse(input$vis_net_exp_type == "risk", "Issuer", "Holder"), 
+        title = ifelse(group == "Banks",
+                       ifelse(selection$exp_type == "risk", "Issuer", "Holder"),
                        title)
       ) %>%
       select(id, label, group, value, title)
-    
+
     edges <- data %>%
       mutate(
         from = Name,
@@ -4076,38 +4239,38 @@ server <- function(input, output, session) {
       ) %>%
       filter(from != to) %>%
       select(from, to, value)
-    
+
     sorted_nodes_ids <- nodes %>%
       filter(group != "Banks") %>%
       arrange(desc(value)) %>%
       pull(id)
-    
-    if(input$vis_net_exp_type == "risk") {
+
+    if (selection$exp_type == "risk") {
       exposure_label <- exposures_names %>%
-        filter(Common_Exposure == input$vis_net_exposure) %>%
+        filter(Common_Exposure == selection$exposure) %>%
         pull(Exposure_Label) %>%
         first()
-      
-      if(length(exposure_label) == 0 || is.na(exposure_label)) {
-        exposure_label <- input$vis_net_exposure
+
+      if (length(exposure_label) == 0 || is.na(exposure_label)) {
+        exposure_label <- selection$exposure
       }
-      
+
       title <- paste(
-        'Bank Risk Exposure Amounts -', exposure_label, '-', input$vis_net_portfolio, "Exposures -",
-        convert_to_quarter(input$vis_net_period), "- Reported values"
+        'Bank Risk Exposure Amounts -', exposure_label, '-', selection$portfolio, "Exposures -",
+        convert_to_quarter(selection$period), "- Reported values"
       )
       caption <- "Size of dots relates to the share of exposures in the sample."
     } else {
       matur <- c(1, 2, 3, 4, 5, 6, 7, 8)
       names(matur) <- c("[0-3M]", "[3M-1Y]", "[1Y-2Y]", "[2Y-3Y]", "[3Y-5Y]", "[5Y-10Y]", "[10Y+]", "Total")
-      
+
       title <- paste(
-        'Bank General Government Exposures -', names(matur[matur == as.numeric(input$vis_net_maturity)]), 'Maturity -',
-        convert_to_quarter(input$vis_net_period), "- Reported Values"
+        'Bank General Government Exposures -', names(matur[matur == as.numeric(selection$maturity)]), 'Maturity -',
+        convert_to_quarter(selection$period), "- Reported Values"
       )
       caption <- "Size of dots relates to the share of exposures in the sample. Pre-2016: Net Direct Long Exposures. 2016-2018: Financial Assets. 2019-: Direct Exposures on Balance Sheet."
     }
-    
+
     visNetwork(nodes, edges, main = title, submain = list(text = paste0("\n", caption), style = "margin-top: 0px; margin-bottom: 5px; padding: 0px;")) %>%
       visNodes(size = "value", title = "title") %>%
       visEdges(
