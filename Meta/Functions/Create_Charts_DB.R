@@ -2242,15 +2242,15 @@ chart_db = plyr::rbind.fill(tr_ratios_export, final_waterfall_export, tr_rwas_ex
 chart_output_dir <- "../Original Data/Chart Data"
 dir.create(chart_output_dir, recursive = TRUE, showWarnings = FALSE)
 
-arrow::write_parquet(tr_ratios_export %>% dplyr::select(-DB), file.path(chart_output_dir, "tr_ratios.parquet"), compression = "snappy")
-arrow::write_parquet(final_waterfall_export %>% dplyr::select(-DB), file.path(chart_output_dir, "final_waterfall.parquet"), compression = "snappy")
-arrow::write_parquet(tr_rwas_export %>% dplyr::select(-DB), file.path(chart_output_dir, "tr_rwas.parquet"), compression = "snappy")
-arrow::write_parquet(tr_assets_export %>% dplyr::select(-DB), file.path(chart_output_dir, "tr_assets.parquet"), compression = "snappy")
-arrow::write_parquet(bank_exp_total_export %>% dplyr::select(-DB), file.path(chart_output_dir, "bank_exp_total.parquet"), compression = "snappy")
-arrow::write_parquet(bank_nace_export %>% dplyr::select(-DB), file.path(chart_output_dir, "bank_nace.parquet"), compression = "snappy")
-arrow::write_parquet(sov_exp_export %>% dplyr::select(-DB), file.path(chart_output_dir, "sov_exp.parquet"), compression = "snappy")
+arrow::write_parquet(tr_ratios_export %>% dplyr::select(-DB), file.path(chart_output_dir, "tr_ratios.parquet"), compression = "gzip")
+arrow::write_parquet(final_waterfall_export %>% dplyr::select(-DB), file.path(chart_output_dir, "final_waterfall.parquet"), compression = "gzip")
+arrow::write_parquet(tr_rwas_export %>% dplyr::select(-DB), file.path(chart_output_dir, "tr_rwas.parquet"), compression = "gzip")
+arrow::write_parquet(tr_assets_export %>% dplyr::select(-DB), file.path(chart_output_dir, "tr_assets.parquet"), compression = "gzip")
+arrow::write_parquet(bank_exp_total_export %>% dplyr::select(-DB), file.path(chart_output_dir, "bank_exp_total.parquet"), compression = "gzip")
+arrow::write_parquet(bank_nace_export %>% dplyr::select(-DB), file.path(chart_output_dir, "bank_nace.parquet"), compression = "gzip")
+arrow::write_parquet(sov_exp_export %>% dplyr::select(-DB), file.path(chart_output_dir, "sov_exp.parquet"), compression = "gzip")
 
-arrow::write_parquet(chart_db, "../Original Data/chart_db.parquet", compression = "snappy")
+arrow::write_parquet(chart_db, "../Original Data/chart_db.parquet", compression = "gzip")
 
 # ## Code to Import datasets (once and for all)
 # chart_db <- arrow::read_parquet("../Original Data/chart_db.parquet")

@@ -1359,7 +1359,7 @@ server <- function(input, output, session) {
       "print(sprintf('Rows returned: %s', nrow(filtered_data)))",
       "",
       "if (grepl('\\.parquet$', output_filename, ignore.case = TRUE)) {",
-      "  arrow::write_parquet(filtered_data, output_filename, compression = 'snappy')",
+      "  arrow::write_parquet(filtered_data, output_filename, compression = 'gzip')",
       "} else {",
       "  readr::write_csv(filtered_data, output_filename)",
       "}",

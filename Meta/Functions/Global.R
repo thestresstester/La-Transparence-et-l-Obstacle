@@ -858,7 +858,7 @@ other_banks <- read_xlsx("Meta/Total_Metadata_App.xlsx", sheet = "Metadata", ran
 # names = read_xlsx("Meta/Metadata_DB.xlsx", sheet = "Dictionary")
 # 
 # bk_struct = left_join(bk_struct, names, by = c("Bank_ID", "ISO2"))
-# arrow::write_parquet(bk_struct, "bank_structure.parquet", compression = "snappy")
+# arrow::write_parquet(bk_struct, "bank_structure.parquet", compression = "gzip")
 # 
 # ## Items and the reste
 # st_structure_bk = st_structure %>%
@@ -892,7 +892,7 @@ other_banks <- read_xlsx("Meta/Total_Metadata_App.xlsx", sheet = "Metadata", ran
 # bk_struct = data.table::rbindlist(list(st_structure_bk, ssm_structure_bk, tr_structure_bk,
 #                   plc_structure_bk, market_structure_bk, sovereign_structure_bk, exposure_structure_bk), fill = T)
 # 
-# arrow::write_parquet(itm_struct, "item_structure.parquet", compression = "snappy")
+# arrow::write_parquet(itm_struct, "item_structure.parquet", compression = "gzip")
 
 ### Utils for visualisation 
 scenarnames <- c(0, 1, 11, 2, 3, 4)
