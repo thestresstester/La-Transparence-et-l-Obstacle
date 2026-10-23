@@ -1,0 +1,23 @@
+var bit=bit||{};bit.initapp=(function(){"use strict";var initialize=function(){if(bit.feed){bit.feed.initialize();}
+if(bit.fluctuation){bit.fluctuation.initialize();}
+if(bit.index){bit.index.initialize();}
+if(bit.relases){bit.relases.initialize();}
+if(bit.search){bit.search.initialize();}
+if(bit.sedexkoe){bit.sedexkoe.initialize();}
+if(bit.sedexmosttraded){bit.sedexmosttraded.initialize();}
+if(bit.risersfallers){bit.risersfallers.initialize();}
+if(bit.etfmosttraded){bit.etfmosttraded.initialize();}
+if(bit.etfrisersfallers){bit.etfrisersfallers.initialize();}
+if(bit.etcrisersfallers){bit.etcrisersfallers.initialize();}
+if(bit.etcmosttraded){bit.etcmosttraded.initialize();}
+if(bit.atfrisersfallers){bit.atfrisersfallers.initialize();}
+if(bit.stockindices){bit.stockindices.initialize();}
+if(bit.atftrades){bit.atftrades.initialize();}
+if(bit.atfturnover){bit.atfturnover.initialize();}
+if(bit.motmosttraded){bit.motmosttraded.initialize();}
+if(bit.extramotmosttraded){bit.extramotmosttraded.initialize();}
+if(bit.govbondsmosttraded){bit.govbondsmosttraded.initialize();}
+if(bit.latestfeeds){bit.latestfeeds.initialize();}
+if(bit.lastipo){bit.lastipo.initialize();}
+if(bit.pirindex){bit.pirindex.initialize();}
+if(bit.volatilityindices){bit.volatilityindices.initialize();}};return{init:initialize()};})(jQuery);

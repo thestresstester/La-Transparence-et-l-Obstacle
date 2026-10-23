@@ -1,0 +1,1 @@
+var bit=bit||{};bit.adv=(function($){"use strict";var adv=$('.js--adv-fix'),wrapper=$('.js--wrapper'),setBanner=function(){if(!bit.device.screen){wrapper.css('padding-bottom',adv.height());}};return{setBanner:setBanner()};})(jQuery);
